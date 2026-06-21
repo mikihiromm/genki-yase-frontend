@@ -74,6 +74,11 @@ export default function Home() {
             <span className="font-medium text-sm">目標設定</span>
             <span className="text-xs text-gray-400">カロリー目標</span>
           </Link>
+          <Link href="/history" className="bg-white rounded-2xl p-4 shadow-sm flex flex-col items-center gap-2 active:scale-95 transition-transform col-span-2">
+            <span className="text-4xl">📋</span>
+            <span className="font-medium text-sm">食事の履歴</span>
+            <span className="text-xs text-gray-400">AIアドバイス付き</span>
+          </Link>
         </div>
       </div>
 
