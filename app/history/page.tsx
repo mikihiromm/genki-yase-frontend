@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'https://backend-two-bice-77.vercel.app';
@@ -27,8 +27,11 @@ export default function HistoryPage() {
   const [advice, setAdvice] = useState<Advice | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [confirmId, setConfirmId] = useState<number | null>(null);
 
-  useEffect(() => {
+  const fetchHistory = useCallback(() => {
+    setLoading(true);
     fetch(`${API}/api/meals/history/${USER_ID}`)
       .then(r => r.json())
       .then(d => {
@@ -42,6 +45,33 @@ export default function HistoryPage() {
       .catch(() => setError('通信エラーが発生しました'))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { fetchHistory(); }, [fetchHistory]);
+
+  const deleteMeal = async (id: number) => {
+    setDeletingId(id);
+    try {
+      const res = await fetch(`${API}/api/meals/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        // ローカルで即時削除
+        setHistory(prev => {
+          const next: Record<string, Meal[]> = {};
+          for (const [date, meals] of Object.entries(prev)) {
+            const filtered = meals.filter(m => m.id !== id);
+            if (filtered.length > 0) next[date] = filtered;
+          }
+          return next;
+        });
+      } else {
+        setError('削除に失敗しました');
+      }
+    } catch {
+      setError('通信エラーが発生しました');
+    } finally {
+      setDeletingId(null);
+      setConfirmId(null);
+    }
+  };
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr + 'T00:00:00');
@@ -128,17 +158,46 @@ export default function HistoryPage() {
               </div>
               <div className="divide-y divide-gray-50">
                 {meals.map(meal => (
-                  <div key={meal.id} className="px-4 py-3 flex items-start gap-3">
-                    <span className="text-2xl shrink-0 mt-0.5">{mealIcon[meal.meal_type] || '🍴'}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-gray-400 mb-0.5">{meal.meal_type}</p>
-                      <p className="text-sm font-medium text-gray-800 leading-tight">
-                        {Array.isArray(meal.dishes) ? meal.dishes.join('、') : '記録あり'}
-                      </p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        {meal.calories}kcal・タンパク質{parseFloat(meal.protein || '0').toFixed(1)}g・塩分{parseFloat(meal.salt || '0').toFixed(1)}g
-                      </p>
-                    </div>
+                  <div key={meal.id} className="px-4 py-3">
+                    {confirmId === meal.id ? (
+                      /* 削除確認 */
+                      <div className="flex items-center gap-2 bg-red-50 rounded-xl p-3">
+                        <p className="flex-1 text-sm text-red-600">この記録を削除しますか？</p>
+                        <button
+                          onClick={() => deleteMeal(meal.id)}
+                          disabled={deletingId === meal.id}
+                          className="bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium"
+                        >
+                          {deletingId === meal.id ? '...' : '削除'}
+                        </button>
+                        <button
+                          onClick={() => setConfirmId(null)}
+                          className="border border-gray-200 text-gray-500 px-3 py-1.5 rounded-lg text-xs"
+                        >
+                          キャンセル
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl shrink-0 mt-0.5">{mealIcon[meal.meal_type] || '🍴'}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-gray-400 mb-0.5">{meal.meal_type}</p>
+                          <p className="text-sm font-medium text-gray-800 leading-tight">
+                            {Array.isArray(meal.dishes) ? meal.dishes.join('、') : '記録あり'}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {meal.calories}kcal・タンパク質{parseFloat(meal.protein || '0').toFixed(1)}g・塩分{parseFloat(meal.salt || '0').toFixed(1)}g
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setConfirmId(meal.id)}
+                          className="shrink-0 text-gray-300 hover:text-red-400 text-xl p-1 transition-colors"
+                          aria-label="削除"
+                        >
+                          🗑
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -150,6 +209,12 @@ export default function HistoryPage() {
             </div>
           );
         })}
+
+        {!loading && dates.length > 0 && (
+          <Link href="/meals" className="block text-center bg-[#185FA5] text-white py-3 rounded-2xl text-sm font-medium">
+            + 食事を記録する
+          </Link>
+        )}
       </div>
     </div>
   );
