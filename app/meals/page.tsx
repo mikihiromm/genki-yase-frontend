@@ -17,10 +17,22 @@ type AnalysisResult = {
   confidence: string;
 };
 
+const todayStr = () => new Date().toISOString().split('T')[0];
+
+const formatDateLabel = (dateStr: string) => {
+  const d = new Date(dateStr + 'T00:00:00');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const diff = Math.round((today.getTime() - d.getTime()) / 86400000);
+  if (diff === 0) return '今日';
+  if (diff === 1) return '昨日';
+  return `${d.getMonth()+1}月${d.getDate()}日`;
+};
+
 export default function MealsPage() {
   const [step, setStep] = useState<'select' | 'analyzing' | 'result' | 'saved'>('select');
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [mealType, setMealType] = useState('朝ごはん');
+  const [mealDate, setMealDate] = useState(todayStr());
   const [error, setError] = useState('');
   const [preview, setPreview] = useState('');
 
@@ -47,19 +59,25 @@ export default function MealsPage() {
 
   const save = async () => {
     if (!result) return;
-    const today = new Date().toISOString().split('T')[0];
     const res = await fetch(`${API}/api/meals`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         userId: USER_ID, mealType, dishes: result.dishes,
         calories: result.totalCalories, protein: result.protein,
-        salt: result.salt, carbs: result.carbs, fat: result.fat, mealDate: today,
+        salt: result.salt, carbs: result.carbs, fat: result.fat, mealDate,
       }),
     });
     if (res.ok) setStep('saved');
     else setError('保存に失敗しました。もう一度お試しください。');
   };
+
+  // 過去7日分の日付リストを生成
+  const dateOptions = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    return d.toISOString().split('T')[0];
+  });
 
   return (
     <div className="max-w-md mx-auto min-h-screen flex flex-col">
@@ -72,6 +90,21 @@ export default function MealsPage() {
         {step === 'select' && (
           <div className="space-y-4">
             {error && <div className="bg-red-50 text-red-600 rounded-xl p-3 text-sm">{error}</div>}
+
+            {/* 日付選択 */}
+            <div className="bg-white rounded-2xl p-4 shadow-sm">
+              <p className="text-sm text-gray-500 mb-2">📅 いつの食事ですか？</p>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {dateOptions.map(d => (
+                  <button key={d} onClick={() => setMealDate(d)}
+                    className={`shrink-0 px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${mealDate === d ? 'border-[#185FA5] text-[#185FA5] bg-blue-50' : 'border-gray-200 text-gray-600'}`}>
+                    {formatDateLabel(d)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 食事種別 */}
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <p className="text-sm text-gray-500 mb-2">食事の種類</p>
               <div className="grid grid-cols-2 gap-2">
@@ -117,6 +150,9 @@ export default function MealsPage() {
         {step === 'result' && result && (
           <div className="space-y-4">
             {preview && <img src={preview} alt="食事写真" className="w-full rounded-2xl object-cover h-48" />}
+            <div className="bg-blue-50 rounded-xl px-4 py-2 text-sm text-[#185FA5] font-medium">
+              📅 {formatDateLabel(mealDate)}の{mealType}として保存します
+            </div>
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <p className="text-sm text-gray-400 mb-1">認識した料理</p>
               <p className="font-medium text-base">{result.dishes.join('・')}</p>
@@ -141,7 +177,7 @@ export default function MealsPage() {
               <p className="text-xs text-gray-300 mt-2">※AIの推定値です</p>
             </div>
             {error && <div className="bg-red-50 text-red-500 rounded-xl p-3 text-sm">{error}</div>}
-            <button onClick={save} className="w-full bg-[#185FA5] text-white py-4 rounded-2xl font-medium text-base">✓ {mealType}として保存する</button>
+            <button onClick={save} className="w-full bg-[#185FA5] text-white py-4 rounded-2xl font-medium text-base">✓ 保存する</button>
             <button onClick={() => { setStep('select'); setResult(null); setPreview(''); }}
               className="w-full border border-gray-200 text-gray-500 py-3 rounded-2xl text-sm">撮り直す</button>
           </div>
@@ -151,8 +187,10 @@ export default function MealsPage() {
           <div className="flex flex-col items-center justify-center h-64 text-center gap-4">
             <p className="text-6xl">✅</p>
             <p className="text-xl font-medium">記録しました！</p>
-            <p className="text-gray-400 text-sm">お疲れさまでした</p>
+            <p className="text-gray-400 text-sm">{formatDateLabel(mealDate)}の{mealType}を保存しました</p>
             <Link href="/" className="mt-4 bg-[#185FA5] text-white px-8 py-3 rounded-xl font-medium">ホームに戻る</Link>
+            <button onClick={() => { setStep('select'); setResult(null); setPreview(''); }}
+              className="border border-gray-200 text-gray-500 px-8 py-3 rounded-xl text-sm">続けて記録する</button>
           </div>
         )}
       </div>
